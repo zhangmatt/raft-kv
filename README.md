@@ -9,7 +9,7 @@ meant to show the core infra skills behind systems like replicated control
 planes, metadata stores, schedulers, and storage services: leader election, log
 replication, quorum commit, recovery, linearizability, and fault injection.
 
-## What It Demonstrates
+## Highlights
 
 - **C++20 systems programming:** threads, mutexes, durable state, binary
   serialization, CMake, Docker.
@@ -36,10 +36,6 @@ Implemented and tested:
 - Exactly-once state-machine application via `(clientId, sequence)`.
 - Single-server membership changes committed through Raft.
 - 3-node and 5-node gRPC clusters via Docker Compose.
-
-Known tradeoff: persistence currently rewrites one atomic state file per node.
-That preserves Raft's durability-before-acknowledgment rule, but a production
-version would use an append-only WAL plus checkpoint snapshots.
 
 ## Build
 

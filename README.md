@@ -1,96 +1,84 @@
 # Raft KV
 
-A C++20 replicated key-value store built around the Raft consensus protocol.
-The project has two transports:
+Raft KV is a C++20 distributed-systems project: a replicated key-value store
+that implements Raft consensus, exposes a gRPC/protobuf API, persists log and
+snapshot state, and tests behavior under crashes and network partitions.
 
-- gRPC/protobuf for real node-to-node and client-to-node communication.
-- An in-process simulator for deterministic crash, partition, delay, and
-  restart tests.
+The point of the project is correctness under failure, not CRUD features. It is
+meant to show the core infra skills behind systems like replicated control
+planes, metadata stores, schedulers, and storage services: leader election, log
+replication, quorum commit, recovery, linearizability, and fault injection.
 
-The consensus implementation is transport-agnostic behind `IRaftTransport`, so
-the same `RaftNode` core is exercised by fast simulator tests and by live gRPC
-nodes.
+## What It Demonstrates
 
-## What Works
+- **C++20 systems programming:** threads, mutexes, durable state, binary
+  serialization, CMake, Docker.
+- **Distributed consensus:** Raft leader election, AppendEntries replication,
+  log consistency checks, conflict backtracking, snapshots, and membership
+  changes.
+- **Production-shaped RPC boundary:** gRPC/protobuf service, client, and peer
+  transport; the Raft core is transport-agnostic behind `IRaftTransport`.
+- **Failure testing:** deterministic simulator for partitions, crashes, message
+  loss, restarts, duplicate client retries, and snapshot catch-up.
+- **Engineering hygiene:** GoogleTest, CTest discovery, GitHub Actions CI,
+  `vcpkg.json`, Docker Compose, and a documented architecture.
 
-- Leader election with randomized timeouts and RequestVote log freshness checks.
-- Log replication with AppendEntries heartbeats, conflict truncation, and leader
-  commit advancement only for entries from the current term.
-- Durable `currentTerm`, `votedFor`, log entries, snapshots, and client de-dup
-  records, persisted before acknowledging Raft RPC success.
+## Current Status
+
+Implemented and tested:
+
+- Single-leader election with randomized timeouts.
+- Strongly consistent log replication with majority commit.
+- Durable `currentTerm`, `votedFor`, log entries, snapshots, and de-dup state.
 - Crash/restart recovery and follower catch-up.
-- Snapshot creation, log compaction, and InstallSnapshot catch-up.
-- Linearizable writes and reads; reads are submitted as Raft log commands.
-- Exactly-once state machine application for retried client requests using
-  `(clientId, sequence)`.
-- Single-server dynamic membership changes committed through the Raft log.
-- GoogleTest coverage for elections, leader crashes, partitions, restarts,
-  duplicate client retries, snapshots, and membership changes.
-- Live gRPC binaries and Docker Compose clusters.
+- Snapshot compaction and `InstallSnapshot`.
+- Linearizable reads and writes through the Raft log.
+- Exactly-once state-machine application via `(clientId, sequence)`.
+- Single-server membership changes committed through Raft.
+- 3-node and 5-node gRPC clusters via Docker Compose.
 
-## Dependencies
+Known tradeoff: persistence currently rewrites one atomic state file per node.
+That preserves Raft's durability-before-acknowledgment rule, but a production
+version would use an append-only WAL plus checkpoint snapshots.
 
-The repository includes `vcpkg.json` for reproducible dependency resolution:
+## Build
 
-- gRPC
-- protobuf
-- GoogleTest
-
-On macOS with Homebrew:
+Install dependencies:
 
 ```sh
+# macOS
 brew install grpc googletest protobuf
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
-```
 
-With vcpkg:
-
-```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug \
-  -DCMAKE_TOOLCHAIN_FILE=/path/to/vcpkg/scripts/buildsystems/vcpkg.cmake
-```
-
-On Ubuntu 24.04:
-
-```sh
+# Ubuntu 24.04
 sudo apt-get install -y build-essential cmake ninja-build \
   libgrpc++-dev libgtest-dev libprotobuf-dev \
   protobuf-compiler protobuf-compiler-grpc
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
 ```
 
-## Build And Test
+Build and test:
 
 ```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
 cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-Run the benchmark:
+The repo also includes `vcpkg.json`:
 
 ```sh
-./build/throughput_bench 1000
+cmake -S . -B build \
+  -DCMAKE_TOOLCHAIN_FILE=/path/to/vcpkg/scripts/buildsystems/vcpkg.cmake
 ```
 
-## Run A gRPC Cluster
+## Run
 
-Start three nodes in separate terminals:
+Start a 3-node gRPC cluster:
 
 ```sh
-./build/raft_grpc_node --id 1 --listen 127.0.0.1:5001 \
-  --advertise 127.0.0.1:5001 --data /tmp/raft-kv/node1 \
-  --peer 2=127.0.0.1:5002 --peer 3=127.0.0.1:5003
-
-./build/raft_grpc_node --id 2 --listen 127.0.0.1:5002 \
-  --advertise 127.0.0.1:5002 --data /tmp/raft-kv/node2 \
-  --peer 1=127.0.0.1:5001 --peer 3=127.0.0.1:5003
-
-./build/raft_grpc_node --id 3 --listen 127.0.0.1:5003 \
-  --advertise 127.0.0.1:5003 --data /tmp/raft-kv/node3 \
-  --peer 1=127.0.0.1:5001 --peer 2=127.0.0.1:5002
+docker compose up --build raft1 raft2 raft3
 ```
 
-Submit client commands:
+Write and read through the gRPC client:
 
 ```sh
 ./build/kv_grpc_client --target 127.0.0.1:5001 \
@@ -102,17 +90,6 @@ Submit client commands:
   get hello
 ```
 
-The client retries once on `NotLeader` when a leader hint maps to a supplied
-`--peer` address.
-
-## Docker
-
-Build and run the default 3-node gRPC cluster:
-
-```sh
-docker compose up --build raft1 raft2 raft3
-```
-
 Run a 5-node cluster:
 
 ```sh
@@ -120,15 +97,10 @@ docker compose --profile five-node up --build \
   raft5-1 raft5-2 raft5-3 raft5-4 raft5-5
 ```
 
-## In-Process Demo
-
-The simulator-backed demo is useful for a quick local sanity check without
-opening sockets:
+Run the benchmark:
 
 ```sh
-./build/raft_server 3 /tmp/raft-kv-demo
-./build/kv_client --data /tmp/raft-kv-demo put local-key local-value
-./build/kv_client --data /tmp/raft-kv-demo get local-key
+./build/throughput_bench 1000
 ```
 
 ## Architecture
@@ -142,39 +114,39 @@ GrpcRaftService  <---->  GrpcPeerClient
     v                       v
 RaftNode  <----------  IRaftTransport
     |
-    +--> PersistentLog          currentTerm, votedFor, log, snapshot
-    +--> KeyValueStateMachine   put/delete/get + client request de-dup
-    +--> commit advancement     majority matchIndex, current-term rule
+    +--> PersistentLog          term, vote, log, snapshot
+    +--> KeyValueStateMachine   KV data + client de-dup
+    +--> Commit logic           majority matchIndex, current-term rule
 ```
 
-Each node uses one mutex around Raft state. RPC handlers persist term, vote, and
-log changes before acknowledging success. Reads go through the log; this is
-simpler and linearizable, while ReadIndex would reduce read latency at the cost
-of another leadership-confirmation path.
+The simulator transport implements the same `IRaftTransport` interface as the
+gRPC peer client, so tests exercise the real Raft state machine without needing
+slow or flaky socket orchestration.
 
-## Design Rationale
+## Design Choices
 
-- Raft over Paxos: Raft separates leader election, log replication, and safety,
-  which makes the implementation easier to audit and explain.
-- Single mutex per node: Raft safety depends on atomic transitions across term,
-  vote, log, commit index, and role. Fine-grained locking is a later
-  optimization.
-- Persist before responding: a vote or accepted log entry that is acknowledged
-  but lost on crash can violate election safety or log matching after restart.
-- Linearizable reads: logged reads are slower than ReadIndex but straightforward
-  and correct under partitions.
-- Partitions: a minority cannot elect or commit because it lacks a quorum. The
-  majority continues; after healing, higher terms and log matching overwrite
-  uncommitted minority entries.
-- Exactly-once application: the system assumes at-least-once delivery, then
-  makes state machine application idempotent with `(clientId, sequence)`.
-- Membership: this uses the single-server change approach. Joint consensus is
-  the natural extension for arbitrary batched reconfiguration.
+- **Raft over Paxos:** Raft separates leader election, replication, and safety,
+  making the implementation easier to audit and explain.
+- **One mutex per node:** correctness first. Raft state transitions touch term,
+  vote, log, role, and commit index together.
+- **Persist before responding:** votes and accepted log entries are durable
+  before the node acknowledges RPC success.
+- **Reads through the log:** slower than ReadIndex, but straightforwardly
+  linearizable under partitions.
+- **At-least-once transport, exactly-once apply:** clients can retry safely
+  because the state machine caches the latest result per client sequence.
 
-## Known Tradeoffs
+## Test Coverage
 
-- Persistence uses an atomic whole-state file per node. This preserves the Raft
-  durability rule for this implementation, but a production storage layer should
-  use an append-only WAL plus checkpoint snapshots.
-- The gRPC transport uses insecure local credentials. TLS/authentication are
-  deployment concerns outside the consensus core.
+GoogleTest/CTest covers:
+
+- leader election and stale-vote rejection
+- leader crash and replacement election
+- minority partition unable to commit, majority partition continues
+- restart replay and catch-up
+- duplicate client retry across leader change
+- snapshot catch-up for lagging followers
+- dynamic add-server membership path
+- protobuf conversion round trips
+
+CI runs the full build and test suite on Ubuntu.

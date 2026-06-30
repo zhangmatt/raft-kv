@@ -1,0 +1,9 @@
+build/
+cmake-build-*/
+.cache/
+.DS_Store
+codex.md
+*.state
+*.tmp
+data/
+vcpkg_installed/

@@ -1,0 +1,10 @@
+{
+  "name": "raft-kv",
+  "version-string": "0.1.0",
+  "description": "A C++20 Raft-backed replicated key-value store.",
+  "dependencies": [
+    "grpc",
+    "protobuf",
+    "gtest"
+  ]
+}

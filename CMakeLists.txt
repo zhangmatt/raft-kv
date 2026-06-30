@@ -16,7 +16,10 @@ if(APPLE)
   endforeach()
 endif()
 
-find_package(protobuf CONFIG REQUIRED)
+find_package(protobuf CONFIG QUIET)
+if(NOT protobuf_FOUND)
+  find_package(Protobuf REQUIRED)
+endif()
 find_package(gRPC CONFIG REQUIRED)
 find_package(GTest CONFIG REQUIRED)
 
@@ -106,6 +109,9 @@ target_link_libraries(kv_grpc_client PRIVATE raft_kv_grpc)
 
 add_executable(throughput_bench bench/throughput_bench.cpp)
 target_link_libraries(throughput_bench PRIVATE raft_kv_core)
+
+add_executable(grpc_cluster_bench bench/grpc_cluster_bench.cpp)
+target_link_libraries(grpc_cluster_bench PRIVATE raft_kv_grpc)
 
 add_executable(raft_unit_tests test/raft_unit_test.cpp)
 target_link_libraries(raft_unit_tests PRIVATE raft_kv_core GTest::gtest_main)

@@ -66,6 +66,8 @@ services:
     build: .
     profiles: ["five-node"]
     command: ["./build/raft_grpc_node", "--id", "1", "--listen", "0.0.0.0:5101", "--advertise", "raft5-1:5101", "--data", "/data/node1", "--peer", "2=raft5-2:5102", "--peer", "3=raft5-3:5103", "--peer", "4=raft5-4:5104", "--peer", "5=raft5-5:5105"]
+    ports:
+      - "5101:5101"
     volumes:
       - raft5-1-data:/data
 
@@ -73,6 +75,8 @@ services:
     build: .
     profiles: ["five-node"]
     command: ["./build/raft_grpc_node", "--id", "2", "--listen", "0.0.0.0:5102", "--advertise", "raft5-2:5102", "--data", "/data/node2", "--peer", "1=raft5-1:5101", "--peer", "3=raft5-3:5103", "--peer", "4=raft5-4:5104", "--peer", "5=raft5-5:5105"]
+    ports:
+      - "5102:5102"
     volumes:
       - raft5-2-data:/data
 
@@ -80,6 +84,8 @@ services:
     build: .
     profiles: ["five-node"]
     command: ["./build/raft_grpc_node", "--id", "3", "--listen", "0.0.0.0:5103", "--advertise", "raft5-3:5103", "--data", "/data/node3", "--peer", "1=raft5-1:5101", "--peer", "2=raft5-2:5102", "--peer", "4=raft5-4:5104", "--peer", "5=raft5-5:5105"]
+    ports:
+      - "5103:5103"
     volumes:
       - raft5-3-data:/data
 
@@ -87,6 +93,8 @@ services:
     build: .
     profiles: ["five-node"]
     command: ["./build/raft_grpc_node", "--id", "4", "--listen", "0.0.0.0:5104", "--advertise", "raft5-4:5104", "--data", "/data/node4", "--peer", "1=raft5-1:5101", "--peer", "2=raft5-2:5102", "--peer", "3=raft5-3:5103", "--peer", "5=raft5-5:5105"]
+    ports:
+      - "5104:5104"
     volumes:
       - raft5-4-data:/data
 
@@ -94,6 +102,8 @@ services:
     build: .
     profiles: ["five-node"]
     command: ["./build/raft_grpc_node", "--id", "5", "--listen", "0.0.0.0:5105", "--advertise", "raft5-5:5105", "--data", "/data/node5", "--peer", "1=raft5-1:5101", "--peer", "2=raft5-2:5102", "--peer", "3=raft5-3:5103", "--peer", "4=raft5-4:5104"]
+    ports:
+      - "5105:5105"
     volumes:
       - raft5-5-data:/data
 
